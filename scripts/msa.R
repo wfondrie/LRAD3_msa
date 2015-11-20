@@ -1,4 +1,3 @@
-detach("package:seqinr", unload=TRUE)
 library(plyr)
 library(msa)
 
@@ -8,13 +7,14 @@ orthos <- orthos[!grepl(" ", orthos$ensemblID),]
 orthos$key <- gsub("^.*\\(", "",orthos$Species)
 orthos$key <- gsub("\\)$","", orthos$key)
 
+library(biomaRt)
+
+ensembl <- useEnsembl("ensembl")
+
 ds <- listDatasets(ensembl)
 ds$key <- gsub(" genes.*$", "", as.character(ds$description))
-
 orthos <- merge(orthos,ds, by = "key")
 
-library(biomaRt)
-ensembl <- useEnsembl("ensembl")
 seqs <- ddply(orthos, "ensemblID", function(x) {
     ensembl <- useDataset(as.character(x$dataset), ensembl)
     prot <- getSequence(id = x$ensemblID, 
@@ -30,15 +30,24 @@ humanSeq <- getSequence(id = "LDLRAD3",
                        type ="hgnc_symbol",
                        seqType = "peptide",
                        mart = ensembl)
+hSap <- data.frame(Species = "Human (Homo sapien)", sequence = humanSeq$peptide[1])
+seqs <- merge(hSap, seqs, all = T)
 
 library(seqinr)
 
-write.fasta(sequences = as.list(seqs$sequence), names = seqs$Species, "data/LRAD3_orthologues.fasta")
+seqList <- as.list(seqs$sequence)
+species <- seqs$Species
+write.fasta(sequences = seqList, names = species, "data/LRAD3_orthologues.fasta")
 
 msaSeqs <- readAAStringSet("data/LRAD3_orthologues.fasta")
 
-alignment <- msa(msaSeqs)
+alignment <- msa(msaSeqs, order = "input")
 
-print(alignment, show="complete")
-# msaPrettyPrint(alignment, output="pdf", showNames="none",
-#                showLogo="none", askForOverwrite=FALSE, verbose=FALSE)
+print(alignment, show="alignment")
+msaPrettyPrint(alignment, output="pdf", showNames="left",
+                showLogo="none", askForOverwrite=FALSE, verbose=F, 
+               alFile = "test.fasta",
+               consensusThreshold = 50,
+               shadingMode = "similar")
+
+detach("package:seqinr", unload=TRUE)
